@@ -1,0 +1,34 @@
+apiVersion: networking.laboys.org/v1alpha1
+kind: ExternalProxy
+metadata:
+  labels:
+    app.kubernetes.io/name: mobius
+    app.kubernetes.io/managed-by: kustomize
+  name: externalproxy-sample
+spec:
+  backends:
+    - addresses:
+        - ip: 192.168.1.1
+      ports:
+        - port: 80
+          name: http
+  service:
+    name: openwrt
+    type: ClusterIP
+    ports:
+      - name: http
+        port: 80
+  ingress:
+    rules:
+      - host: router.laboys.org
+        http:
+          paths:
+            - pathType: ImplementationSpecific
+              backend:
+                port:
+                  name: http
+    tls:
+      - hosts:
+          - router.laboys.org
+        secretName: star-laboys-org
+
