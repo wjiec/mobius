@@ -148,6 +148,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	newStatus := &ExternalProxyStatus{
+		// Should be ready or not based on the state of Ingress and Service
 		Ready:              true,
 		ServiceName:        getServiceName(&instance),
 		ObservedGeneration: instance.Generation,

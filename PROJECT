@@ -5,6 +5,9 @@
 domain: laboys.org
 layout:
 - go.kubebuilder.io/v4
+multigroup: true
+plugins:
+  helm.kubebuilder.io/v1-alpha: {}
 projectName: mobius
 repo: github.com/wjiec/mobius
 resources:
@@ -17,4 +20,8 @@ resources:
   kind: ExternalProxy
   path: github.com/wjiec/mobius/api/networking/v1alpha1
   version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 version: "3"

@@ -35,6 +35,7 @@ import (
 	networkingv1alpha1 "github.com/wjiec/mobius/api/networking/v1alpha1"
 	networkingcontroller "github.com/wjiec/mobius/internal/controller/networking"
 	"github.com/wjiec/mobius/internal/fieldindex"
+	webhooknetworkingv1alpha1 "github.com/wjiec/mobius/internal/webhook/networking/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -112,6 +113,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhooknetworkingv1alpha1.SetupExternalProxyWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ExternalProxy")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

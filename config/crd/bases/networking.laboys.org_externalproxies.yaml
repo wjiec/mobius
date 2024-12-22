@@ -3,14 +3,18 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.4
   name: externalproxies.networking.laboys.org
 spec:
   group: networking.laboys.org
   names:
+    categories:
+    - mobius
     kind: ExternalProxy
     listKind: ExternalProxyList
     plural: externalproxies
+    shortNames:
+    - mep
     singular: externalproxy
   scope: Namespaced
   versions:
@@ -50,76 +54,33 @@ spec:
             description: ExternalProxySpec defines the desired state of ExternalProxy
             properties:
               backends:
+                description: Backend defines the endpoint to which the traffic will
+                  be forwarded to.
                 items:
+                  description: ExternalProxyBackend describes the backend address
+                    of the given proxy as well as the port.
                   properties:
                     addresses:
+                      description: |-
+                        Addresses which offer the related ports that are marked as ready. These endpoints
+                        should be considered safe for load balancers and clients to utilize.
                       items:
-                        description: EndpointAddress is a tuple that describes single
+                        description: ExternalProxyBackendAddress describes single
                           IP address.
                         properties:
-                          hostname:
-                            description: The Hostname of this endpoint
-                            type: string
                           ip:
                             description: |-
                               The IP of this endpoint.
                               May not be loopback (127.0.0.0/8 or ::1), link-local (169.254.0.0/16 or fe80::/10),
                               or link-local multicast (224.0.0.0/24 or ff02::/16).
                             type: string
-                          nodeName:
-                            description: 'Optional: Node hosting this endpoint. This
-                              can be used to determine endpoints local to a node.'
-                            type: string
-                          targetRef:
-                            description: Reference to object providing the endpoint.
-                            properties:
-                              apiVersion:
-                                description: API version of the referent.
-                                type: string
-                              fieldPath:
-                                description: |-
-                                  If referring to a piece of an object instead of an entire object, this string
-                                  should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                                  For example, if the object reference is to a container within a pod, this would take on a value like:
-                                  "spec.containers{name}" (where "name" refers to the name of the container that triggered
-                                  the event) or if no container name is specified "spec.containers[2]" (container with
-                                  index 2 in this pod). This syntax is chosen only to have some well-defined way of
-                                  referencing a part of an object.
-                                  TODO: this design is not final and this field is subject to change in the future.
-                                type: string
-                              kind:
-                                description: |-
-                                  Kind of the referent.
-                                  More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-                                type: string
-                              name:
-                                description: |-
-                                  Name of the referent.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                type: string
-                              namespace:
-                                description: |-
-                                  Namespace of the referent.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-                                type: string
-                              resourceVersion:
-                                description: |-
-                                  Specific resourceVersion to which this reference is made, if any.
-                                  More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
-                                type: string
-                              uid:
-                                description: |-
-                                  UID of the referent.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
-                                type: string
-                            type: object
-                            x-kubernetes-map-type: atomic
                         required:
                         - ip
                         type: object
-                        x-kubernetes-map-type: atomic
                       type: array
+                      x-kubernetes-list-type: atomic
                     ports:
+                      description: The available port number on the related addresses.
                       items:
                         description: EndpointPort is a tuple that describes a single
                           port.
@@ -131,16 +92,13 @@ spec:
                               This field follows standard Kubernetes label syntax.
                               Valid values are either:
 
-
                               * Un-prefixed protocol names - reserved for IANA standard service names (as per
                               RFC-6335 and https://www.iana.org/assignments/service-names).
-
 
                               * Kubernetes-defined prefixed names:
                                 * 'kubernetes.io/h2c' - HTTP/2 prior knowledge over cleartext as described in https://www.rfc-editor.org/rfc/rfc9113.html#name-starting-http-2-with-prior-
                                 * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455
                                 * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455
-
 
                               * Other protocols should use implementation-defined prefixed names such as
                               mycompany.com/my-custom-protocol.
@@ -157,7 +115,6 @@ spec:
                             format: int32
                             type: integer
                           protocol:
-                            default: TCP
                             description: |-
                               The IP protocol for this port.
                               Must be UDP, TCP, or SCTP.
@@ -168,12 +125,17 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       type: array
+                      x-kubernetes-list-type: atomic
                   required:
                   - addresses
                   - ports
                   type: object
+                minItems: 1
                 type: array
               ingress:
+                description: |-
+                  Optional Ingress configuration that declares how the proxied service
+                  will be accessed externally via HTTP(s).
                 properties:
                   defaultBackend:
                     description: |-
@@ -183,9 +145,8 @@ spec:
                       of the rules will be up to the Ingress controller.
                     properties:
                       port:
-                        description: |-
-                          port of the referenced service. A port name or port number
-                          is required for a ExternalProxyServiceBackendPort.
+                        description: port of the referenced service. A port name or
+                          port number is required.
                         properties:
                           name:
                             description: |-
@@ -201,11 +162,17 @@ spec:
                         type: object
                     type: object
                   ingressClassName:
-                    description: ingressClassName is the name of an IngressClass cluster
-                      resource.
+                    description: |-
+                      ingressClassName is the name of an IngressClass cluster resource. Ingress
+                      controller implementations use this field to know whether they should be
+                      serving this Ingress resource, by a transitive connection
+                      (controller -> IngressClass -> Ingress resource).
                     type: string
                   metadata:
-                    description: Standard object's metadata.
+                    description: |-
+                      Only metadata such as name, label and annotations are allowed to be configured, and
+                      these will be copied to the created Ingress. No other fields are allowed and will be
+                      rejected during validation.
                     x-kubernetes-preserve-unknown-fields: true
                   rules:
                     description: |-
@@ -214,21 +181,21 @@ spec:
                     items:
                       description: |-
                         ExternalProxyIngressRule represents the rules mapping the paths under a specified
-                        host to the related backend services. Incoming requests are first evaluated for a
-                        host match, then routed to the backend associated with the matching IngressRuleValue.
+                        host to the related backend proxy services. Incoming requests are first evaluated
+                        for a host match, then routed to the backend associated with the matching
+                        ExternalProxyIngressHttpRuleValue.
                       properties:
                         host:
                           description: |-
                             host is the fully qualified domain name of a network host, as defined by RFC 3986.
 
-
                             Incoming requests are matched against the host before the IngressRuleValue. If the
-                            host is unspecified, the Ingress routes all traffic based on the specified IngressRuleValue.
+                            host is unspecified, the Ingress routes all traffic based on the specified
+                            ExternalProxyIngressHttpRuleValue.
                           type: string
                         http:
                           description: |-
                             http represents a rule to route requests for this ExternalProxyIngressRule.
-
 
                             If unspecified, the rule defaults to a http catch-all. Whether that sends
                             just traffic matching the host to the default backend or all traffic to the
@@ -239,18 +206,19 @@ spec:
                                 requests to backends.
                               items:
                                 description: |-
-                                  ExternalProxyIngressHttpPath associates a path with a backend. Incoming urls matching
-                                  the path are forwarded to the backend.
+                                  ExternalProxyIngressHttpPath associates a path with proxied service. Incoming urls
+                                  matching the path are forwarded to the corresponding backend.
                                 properties:
                                   backend:
                                     description: |-
-                                      backend defines the referenced service endpoint to which the traffic
+                                      backend defines the referenced service port to which the traffic
                                       will be forwarded to.
+
+                                      This field can be ignored if only one port is configured in the service.
                                     properties:
                                       port:
-                                        description: |-
-                                          port of the referenced service. A port name or port number
-                                          is required for a ExternalProxyServiceBackendPort.
+                                        description: port of the referenced service.
+                                          A port name or port number is required.
                                         properties:
                                           name:
                                             description: |-
@@ -273,18 +241,25 @@ spec:
                                       when using PathType with value "Exact" or "Prefix".
                                     type: string
                                   pathType:
-                                    description: pathType determines the interpretation
-                                      of the path matching.
+                                    description: |-
+                                      pathType determines the interpretation of the path matching. Valid
+                                      options are Exact, Prefix and ImplementationSpecific.
+                                    enum:
+                                    - Exact
+                                    - Prefix
+                                    - ImplementationSpecific
                                     type: string
                                 required:
                                 - pathType
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                           required:
                           - paths
                           type: object
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   tls:
                     description: |-
                       tls represents the TLS configuration. Currently, the Ingress only supports a
@@ -318,14 +293,30 @@ spec:
                     type: array
                 type: object
               service:
+                description: |-
+                  The service is a generalized description of the destination endpoint of the
+                  traffic, containing the ingress port number of the traffic and the corresponding
+                  backend port number or name.
+
+                  If the content of the service is not defined, a Service of type ClusterIP is automatically
+                  generated based on the configuration in Backends.
+
+                  If Service is configured manually, the names of all defined ports must be unique and match
+                  the port names in Backends, otherwise forwarding will not be possible. The name can be omitted
+                  if there is only one port.
+
+                  You can configure only the name, metadata, and type of the Service. Leaving the port information
+                  blank will be automatically generated by the controller.
                 properties:
                   metadata:
-                    description: Standard object's metadata.
+                    description: |-
+                      Only metadata such as name, label and annotations are allowed to be configured, and
+                      these will be copied to the created Service. No other fields are allowed and will be
+                      rejected during validation.
+
+                      If you do not specify a name, the name of the ExternalProxy will be used as the
+                      name of the Service by default.
                     x-kubernetes-preserve-unknown-fields: true
-                  name:
-                    description: The name of the Service, if empty the name of the
-                      ExternalProxy is used.
-                    type: string
                   ports:
                     description: The list of ports that are exposed by this service.
                     items:
@@ -338,16 +329,13 @@ spec:
                             This field follows standard Kubernetes label syntax.
                             Valid values are either:
 
-
                             * Un-prefixed protocol names - reserved for IANA standard service names (as per
                             RFC-6335 and https://www.iana.org/assignments/service-names).
-
 
                             * Kubernetes-defined prefixed names:
                               * 'kubernetes.io/h2c' - HTTP/2 prior knowledge over cleartext as described in https://www.rfc-editor.org/rfc/rfc9113.html#name-starting-http-2-with-prior-
                               * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455
                               * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455
-
 
                             * Other protocols should use implementation-defined prefixed names such as
                             mycompany.com/my-custom-protocol.
@@ -401,13 +389,21 @@ spec:
                       - port
                       type: object
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - port
+                    - protocol
+                    x-kubernetes-list-type: map
                   type:
-                    description: type determines how the Service is exposed. Defaults
-                      to ClusterIP.
+                    description: |-
+                      type determines how the Service is exposed. Defaults to ClusterIP. Valid
+                      options are ExternalName, ClusterIP, NodePort, and LoadBalancer.
+                    enum:
+                    - ClusterIP
+                    - NodePort
+                    - LoadBalancer
                     type: string
                 required:
                 - ports
-                - type
                 type: object
             required:
             - backends
@@ -416,16 +412,19 @@ spec:
             description: ExternalProxyStatus defines the observed state of ExternalProxy
             properties:
               observedGeneration:
+                description: ObservedGeneration is the last generation the controller
+                  observed.
                 format: int64
                 type: integer
               ready:
+                description: |-
+                  Ready Indicates whether the current ExternalProxy, including its subordinate
+                  Services, and Ingress resources are ready.
                 type: boolean
               serviceName:
+                description: ServiceName is the name of the Service object that was
+                  finalized for use.
                 type: string
-            required:
-            - observedGeneration
-            - ready
-            - serviceName
             type: object
         type: object
     served: true

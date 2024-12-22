@@ -57,7 +57,7 @@ func (s *Singleton[C, R]) Sync(ctx context.Context, controller C) error {
 
 		s.Expect(expectations.ControllerKeyFromCtx(ctx), expectations.ActionCreations, desiredObject.GetName())
 		if err = s.eventHandler.Create(ctx, desiredObject); err != nil {
-			s.Observe(expectations.ControllerKeyFromCtx(ctx), expectations.ActionDeletions, desiredObject.GetName())
+			s.Observe(expectations.ControllerKeyFromCtx(ctx), expectations.ActionCreations, desiredObject.GetName())
 			return err
 		}
 
@@ -75,6 +75,7 @@ func (s *Singleton[C, R]) Sync(ctx context.Context, controller C) error {
 	// Delete all objects that are inactivated.
 	var eg multierror.Group
 	for _, currObject := range ownerObjects {
+		//goland:noinspection GoDfaNilDereference We've already determined that activatedObject is not nil
 		if !hasActivatedObject || currObject.GetUID() != activatedObject.GetUID() {
 			eg.Go(func() error { return s.eventHandler.Delete(ctx, currObject) })
 		}
