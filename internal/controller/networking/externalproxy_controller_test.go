@@ -55,7 +55,7 @@ var _ = Describe("ExternalProxy Controller", func() {
 					Spec: networkingv1alpha1.ExternalProxySpec{
 						Backends: []networkingv1alpha1.ExternalProxyBackend{
 							{
-								Addresses: []corev1.EndpointAddress{
+								Addresses: []networkingv1alpha1.ExternalProxyBackendAddress{
 									{IP: "192.168.1.1"},
 								},
 								Ports: []corev1.EndpointPort{
@@ -64,7 +64,6 @@ var _ = Describe("ExternalProxy Controller", func() {
 							},
 						},
 						Service: networkingv1alpha1.ExternalProxyService{
-							Name: ptr.To("example"),
 							Ports: []corev1.ServicePort{
 								{Name: "http", Port: 80},
 							},

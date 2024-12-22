@@ -52,9 +52,10 @@ var (
 // If the service name is specified in the ExternalProxy spec, it returns that name.
 // Otherwise, it returns the name of the ExternalProxy object.
 func getServiceName(ep *ExternalProxy) string {
-	if ep.Spec.Service.Name != nil {
-		return *ep.Spec.Service.Name
+	if ep.Spec.Service.Name != "" {
+		return ep.Spec.Service.Name
 	}
+
 	return ep.Name
 }
 
@@ -102,8 +103,15 @@ func newEndpoints(_ context.Context, instance *ExternalProxy) *corev1.Endpoints 
 	}
 
 	for _, backend := range instance.Spec.Backends {
+		addresses := make([]corev1.EndpointAddress, 0, len(backend.Addresses))
+		for _, address := range backend.Addresses {
+			addresses = append(addresses, corev1.EndpointAddress{
+				IP: address.IP,
+			})
+		}
+
 		endpoints.Subsets = append(endpoints.Subsets, corev1.EndpointSubset{
-			Addresses: backend.Addresses,
+			Addresses: addresses,
 			Ports:     backend.Ports,
 		})
 	}
@@ -191,13 +199,13 @@ func extractExternalProxyRevision[T client.Object](object T) int64 {
 //
 // It uses the generation of the controller object as the revision value.
 func applyExternalProxyRevision[R client.Object](controller *ExternalProxy, object R) R {
-	annotation := object.GetAnnotations()
-	if annotation == nil {
-		annotation = make(map[string]string)
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
 	}
 
-	annotation[networking.ExternalProxyRevisionAnnotationKey] = strconv.FormatInt(controller.Generation, 10)
-	object.SetAnnotations(annotation)
+	annotations[networking.ExternalProxyRevisionAnnotationKey] = strconv.FormatInt(controller.Generation, 10)
+	object.SetAnnotations(annotations)
 
 	return object
 }

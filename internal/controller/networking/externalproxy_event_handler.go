@@ -22,6 +22,7 @@ import (
 
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -32,14 +33,14 @@ import (
 var (
 	// initialingRateLimiter calculates the delay duration for existing resources
 	// triggered Create event when the Informer cache has just synced.
-	initialingRateLimiter = workqueue.NewItemExponentialFailureRateLimiter(3*time.Second, 30*time.Second)
+	initialingRateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](3*time.Second, 30*time.Second)
 )
 
 type watchEventHandler[T client.Object] struct {
 	expectations expectations.ControllerExpectations
 }
 
-func (w *watchEventHandler[T]) Create(ctx context.Context, evt event.TypedCreateEvent[client.Object], q workqueue.RateLimitingInterface) {
+func (w *watchEventHandler[T]) Create(ctx context.Context, evt event.TypedCreateEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
 	logger := log.FromContext(ctx)
 	if evt.Object.GetDeletionTimestamp() != nil {
 		w.Delete(ctx, event.TypedDeleteEvent[client.Object]{Object: evt.Object}, q)
@@ -57,22 +58,22 @@ func (w *watchEventHandler[T]) Create(ctx context.Context, evt event.TypedCreate
 	if isSatisfied {
 		// If the expectation is satisfied, it should be an existing Pod and the Informer
 		// cache should have just synced.
-		q.AddAfter(*req, initialingRateLimiter.When(req))
+		q.AddAfter(*req, initialingRateLimiter.When(*req))
 	} else {
 		// Otherwise, add it immediately and reset the rate limiter
-		initialingRateLimiter.Forget(req)
+		initialingRateLimiter.Forget(*req)
 		q.Add(*req)
 	}
 }
 
-func (w *watchEventHandler[T]) Update(ctx context.Context, evt event.TypedUpdateEvent[client.Object], q workqueue.RateLimitingInterface) {
+func (w *watchEventHandler[T]) Update(ctx context.Context, evt event.TypedUpdateEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
 	if evt.ObjectNew.GetDeletionTimestamp() != nil {
 		w.Delete(ctx, event.TypedDeleteEvent[client.Object]{Object: evt.ObjectNew}, q)
 		return
 	}
 }
 
-func (w *watchEventHandler[T]) Delete(ctx context.Context, evt event.TypedDeleteEvent[client.Object], q workqueue.RateLimitingInterface) {
+func (w *watchEventHandler[T]) Delete(ctx context.Context, evt event.TypedDeleteEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
 	logger := log.FromContext(ctx)
 	if _, ok := evt.Object.(T); !ok {
 		logger.Error(nil, "Skipped deletion event", "deleteStateUnknown", evt.DeleteStateUnknown, "obj", evt.Object)
@@ -88,5 +89,5 @@ func (w *watchEventHandler[T]) Delete(ctx context.Context, evt event.TypedDelete
 	q.Add(*req)
 }
 
-func (w *watchEventHandler[T]) Generic(context.Context, event.TypedGenericEvent[client.Object], workqueue.RateLimitingInterface) {
+func (w *watchEventHandler[T]) Generic(context.Context, event.TypedGenericEvent[client.Object], workqueue.TypedRateLimitingInterface[ctrl.Request]) {
 }
